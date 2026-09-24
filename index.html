@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat vs Sen</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#f1f5f9;--me:#ffd166;--bad:#ef476f;--good:#06d6a0;--panel:rgba(10,18,36,.78)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0d1830;color:var(--ink);font-family:'Bricolage Grotesque',system-ui,sans-serif;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+.hud{position:fixed;padding:10px 14px;background:var(--panel);border-radius:12px;font-weight:500}
+#stats{top:12px;left:12px;font-size:22px;display:flex;gap:18px;align-items:center}
+#hearts{color:var(--bad);letter-spacing:2px}
+#board{top:12px;right:12px;min-width:220px}
+#board h3{margin:0 0 6px;font-size:15px;font-weight:800}
+#board div{display:flex;justify-content:space-between;gap:12px;font-size:16px}
+#feed{bottom:12px;left:12px;font-size:15px;max-width:55vw;line-height:1.5}
+#help{bottom:12px;right:12px;font-size:14px;text-align:right;line-height:1.5}
+#status{top:12px;left:50%;transform:translateX(-50%);font-size:13px;display:flex;gap:14px}
+#gear{position:fixed;top:64px;left:12px;background:var(--panel);color:var(--ink);border:0;border-radius:10px;padding:8px 12px;font:inherit;font-size:14px;cursor:pointer}
+#setup{position:fixed;inset:0;background:rgba(8,14,30,.9);display:flex;align-items:center;justify-content:center;padding:16px;z-index:5}
+#setup .box{width:min(480px,100%);max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:12px}
+#skins{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.skin{background:#101c38;border:2px solid #2b4470;border-radius:10px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:14px}
+.thumb{width:56px;height:56px;border-radius:8px;background:#0d1830;display:flex;align-items:center;justify-content:center}
+.thumb img{max-width:100%;max-height:100%}
+.pick{background:#2b4470;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;position:relative}
+.pick:focus-within{outline:3px solid var(--me)}
+.pick input{position:absolute;opacity:0;width:1px;height:1px}
+.th{width:56px;height:56px;border-radius:8px;background:#0d1830}
+.nav{display:flex;gap:6px}
+.nav button{font:inherit;font-size:18px;line-height:1;width:34px;height:28px;border-radius:8px;border:0;background:#2b4470;color:var(--ink);cursor:pointer}
+.skin .x{font:inherit;font-size:12px;background:none;border:0;color:var(--bad);cursor:pointer;padding:0}
+#setup h1{margin:0;font-size:40px;font-weight:800;line-height:1.05}
+#setup p{margin:0;opacity:.85;line-height:1.5}
+#setup label{display:flex;flex-direction:column;gap:4px;font-size:14px}
+#setup input{font:inherit;font-size:17px;padding:10px 12px;border-radius:10px;border:2px solid #2b4470;background:#101c38;color:var(--ink)}
+#setup input:focus-visible,button:focus-visible{outline:3px solid var(--me);outline-offset:2px}
+.row{display:flex;gap:10px}
+.row button{flex:1;font:inherit;font-weight:800;font-size:17px;padding:12px;border-radius:10px;border:0;cursor:pointer;background:var(--me);color:#1a1a1a}
+.row button.alt{background:#2b4470;color:var(--ink)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud" id="stats"><span id="hearts"></span><span id="time">0.0 sn</span><span id="best" style="opacity:.7;font-size:16px"></span></div>
+<div class="hud" id="status"><span id="s-tw"></span><span id="s-ki"></span></div>
+<button id="gear">Ayarlar</button>
+<div class="hud" id="board"><h3>En çok sabotaj</h3><div id="rows"><span style="opacity:.6">Henüz kimse vuramadı</span></div></div>
+<div class="hud" id="feed"></div>
+<div class="hud" id="help"><b>!engel !düşman !bomba</b> zorlaştırır<br><b>!can !kalkan</b> yardım eder<br>Kişi başı 6 sn bekleme</div>
+
+<div id="setup"><div class="box">
+  <h1>Chat vs Sen</h1>
+  <p>Chat komutlarla sana engel çıkarır, sen ok tuşları veya WASD ile hayatta kalırsın. Kanal adını yaz, bağlan.</p>
+  <label>Twitch kanal adı<input id="tw" autocomplete="off" placeholder="kanaladin"></label>
+  <label>Kick kanal adı<input id="ki" autocomplete="off" placeholder="kanaladin"></label>
+  <label>Kick sohbet ID (kanal adıyla bulunamazsa)<input id="kid" autocomplete="off" inputmode="numeric" placeholder="boş bırakabilirsin"></label>
+  <div><b>Görseller</b><span style="font-size:13px;opacity:.7"> (hazır seçenekler arasında ‹ › ile gez ya da kendi PNG'ni yükle)</span></div>
+  <div id="skins"></div><p id="sknote" style="font-size:13px;color:#ffd166"></p>
+  <div class="row"><button id="go">Bağlan ve başla</button><button id="solo" class="alt">Bağlanmadan dene</button></div>
+  <p style="font-size:13px;opacity:.7">Deneme modunda 1-5 tuşları chat komutlarını taklit eder: engel, düşman, bomba, can, kalkan.</p>
+</div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('c'),ctx=cv.getContext('2d');
+const W=960,H=540,COOL=6000;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let G,menu=true,best=0,feed=[];
+const keys={},cd={};
+
+function fit(){const d=devicePixelRatio||1;cv.width=innerWidth*d;cv.height=innerHeight*d}
+addEventListener('resize',fit);fit();
+
+function reset(){G={t:0,lives:3,px:W/2,py:H/2,inv:0,shield:0,hz:[],pk:[],fx:[],bad:{},over:false,overT:0};feed=[];renderFeed()}
+reset();
+
+/* ---------- oyun mantığı ---------- */
+const LABEL={engel:'engel yağdırdı',dusman:'düşman saldı',bomba:'bomba kurdu',can:'can gönderdi',kalkan:'kalkan gönderdi'};
+function log(u,msg){feed.push('<b>'+esc(u)+'</b> '+msg);feed=feed.slice(-4);renderFeed()}
+function renderFeed(){$('feed').innerHTML=feed.length?feed.join('<br>'):'<span style="opacity:.6">Chat bekleniyor…</span>'}
+
+function spawn(k,u){
+  if(G.hz.length>45)return;
+  if(k==='engel')G.hz.push({k,x:rnd(40,W-40),y:-30,vy:rnd(220,340),s:36,u});
+  else if(k==='dusman'){const side=Math.random()<.5;G.hz.push({k,x:side?(Math.random()<.5?-20:W+20):rnd(0,W),y:side?rnd(0,H):(Math.random()<.5?-20:H+20),r:16,life:9,u})}
+  else if(k==='bomba')G.hz.push({k,x:G.px,y:G.py,t:1.6,R:85,u});
+  else if(k==='can'||k==='kalkan')G.pk.push({k,x:rnd(60,W-60),y:rnd(60,H-60),life:8,u});
+  log(u,LABEL[k]);
+}
+
+function hit(u,pts){
+  if(G.inv>0)return;
+  if(G.shield>0){G.shield=0;G.inv=.6;return}
+  G.lives--;G.inv=1.2;G.bad[u]=(G.bad[u]||0)+pts;
+  G.fx.push({x:G.px,y:G.py,r:10,life:.4,c:'#ef476f'});
+  if(G.lives<=0){G.over=true;G.overT=8;best=Math.max(best,G.t)}
+}
+
+function update(dt){
+  if(G.over){G.overT-=dt;if(G.overT<=0)reset();return}
+  G.t+=dt;G.inv=Math.max(0,G.inv-dt);G.shield=Math.max(0,G.shield-dt);
+  let dx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+  let dy=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
+  if(dx&&dy){dx*=.7071;dy*=.7071}
+  G.px=Math.min(W-14,Math.max(14,G.px+dx*270*dt));
+  G.py=Math.min(H-14,Math.max(14,G.py+dy*270*dt));
+  for(const h of G.hz){
+    if(h.k==='engel'){h.y+=h.vy*dt;if(Math.abs(G.px-h.x)<h.s/2+12&&Math.abs(G.py-h.y)<h.s/2+12){h.dead=1;hit(h.u,1)}if(h.y>H+40)h.dead=1}
+    else if(h.k==='dusman'){const a=Math.atan2(G.py-h.y,G.px-h.x);h.x+=Math.cos(a)*95*dt;h.y+=Math.sin(a)*95*dt;h.life-=dt;
+      if(Math.hypot(G.px-h.x,G.py-h.y)<h.r+13){h.dead=1;hit(h.u,1)}if(h.life<=0)h.dead=1}
+    else if(h.k==='bomba'){h.t-=dt;if(h.t<=0){h.dead=1;G.fx.push({x:h.x,y:h.y,r:h.R,life:.35,c:'#ffd166'});if(Math.hypot(G.px-h.x,G.py-h.y)<h.R)hit(h.u,2)}}
+  }
+  G.hz=G.hz.filter(h=>!h.dead);
+  for(const p of G.pk){p.life-=dt;
+    if(Math.hypot(G.px-p.x,G.py-p.y)<28){p.life=0;if(p.k==='can')G.lives=Math.min(5,G.lives+1);else G.shield=4;log('Sen','<b>'+esc(p.u)+'</b> yardımını aldın')}}
+  G.pk=G.pk.filter(p=>p.life>0);
+  for(const f of G.fx)f.life-=dt;
+  G.fx=G.fx.filter(f=>f.life>0);
+}
+
+/* ---------- çizim ---------- */
+function tag(u,x,y){ctx.font='500 12px "Bricolage Grotesque",system-ui,sans-serif';ctx.textAlign='center';ctx.fillStyle='rgba(241,245,249,.9)';ctx.fillText(u,x,y)}
+function draw(){
+  const d=cv.width,h=cv.height,s=Math.min(d/W,h/H);
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#0d1830';ctx.fillRect(0,0,d,h);
+  ctx.setTransform(s,0,0,s,(d-W*s)/2,(h-H*s)/2);
+  ctx.save();ctx.beginPath();ctx.rect(0,0,W,H);ctx.clip();
+  ctx.fillStyle='#14213d';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#1f3358';ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<=W;x+=40){ctx.moveTo(x,0);ctx.lineTo(x,H)}
+  for(let y=0;y<=H;y+=40){ctx.moveTo(0,y);ctx.lineTo(W,y)}
+  ctx.stroke();
+  for(const p of G.pk){ctx.globalAlpha=p.life<2?.5+.5*Math.sin(p.life*14):1;
+    if(!img(p.k,p.x,p.y,44)){ctx.fillStyle=p.k==='can'?'#06d6a0':'#5ec8ff';ctx.beginPath();
+      if(p.k==='can'){ctx.rect(p.x-4,p.y-12,8,24);ctx.rect(p.x-12,p.y-4,24,8)}else ctx.arc(p.x,p.y,12,0,7);
+      ctx.fill()}
+    ctx.globalAlpha=1;tag(p.u,p.x,p.y-26)}
+  for(const o of G.hz){
+    if(o.k==='engel'){if(!img('engel',o.x,o.y,o.s*1.5)){ctx.fillStyle='#ef476f';ctx.fillRect(o.x-o.s/2,o.y-o.s/2,o.s,o.s)}tag(o.u,o.x,o.y-o.s/2-8)}
+    else if(o.k==='dusman'){if(!img('dusman',o.x,o.y,o.r*2.8)){ctx.fillStyle='#ff8fa3';ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,7);ctx.fill()}tag(o.u,o.x,o.y-o.r-10)}
+    else{const k=1-o.t/1.6;ctx.fillStyle='rgba(255,209,102,'+(.1+.25*k)+')';ctx.strokeStyle='#ffd166';ctx.setLineDash([8,6]);ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(o.x,o.y,o.R,0,7);ctx.fill();ctx.stroke();ctx.setLineDash([]);img('bomba',o.x,o.y,52);tag(o.u,o.x,o.y-o.R-6)}
+  }
+  for(const f of G.fx){ctx.strokeStyle=f.c;ctx.lineWidth=4;ctx.globalAlpha=f.life*2.5;ctx.beginPath();ctx.arc(f.x,f.y,f.r*(1.3-f.life),0,7);ctx.stroke();ctx.globalAlpha=1}
+  if(!G.over&&(G.inv<=0||Math.floor(G.inv*12)%2)){
+    if(!img('player',G.px,G.py,52)){
+      ctx.fillStyle='#ffd166';ctx.beginPath();ctx.arc(G.px,G.py,14,0,7);ctx.fill();
+      ctx.fillStyle='#14213d';ctx.beginPath();ctx.arc(G.px-5,G.py-3,2.5,0,7);ctx.arc(G.px+5,G.py-3,2.5,0,7);ctx.fill()}
+    if(G.shield>0){ctx.strokeStyle='#5ec8ff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(G.px,G.py,21,0,7);ctx.stroke()}
+  }
+  if(G.over){
+    ctx.fillStyle='rgba(8,14,30,.78)';ctx.fillRect(0,0,W,H);
+    const top=Object.entries(G.bad).sort((a,b)=>b[1]-a[1])[0];
+    ctx.textAlign='center';ctx.fillStyle='#ef476f';ctx.font='800 64px "Bricolage Grotesque",system-ui,sans-serif';ctx.fillText('Chat kazandı',W/2,H/2-20);
+    ctx.fillStyle='#f1f5f9';ctx.font='500 24px "Bricolage Grotesque",system-ui,sans-serif';
+    ctx.fillText(G.t.toFixed(1)+' sn dayandın'+(top?' · en çok vuran: '+top[0]:''),W/2,H/2+24);
+    ctx.font='500 18px "Bricolage Grotesque",system-ui,sans-serif';ctx.fillStyle='rgba(241,245,249,.7)';
+    ctx.fillText('Yeni tur '+Math.ceil(G.overT)+' sn içinde · Boşluk tuşu ile hemen başlat',W/2,H/2+60);
+  }
+  ctx.restore();
+}
+
+/* ---------- arayüz ---------- */
+function hud(){
+  $('hearts').textContent='♥'.repeat(Math.max(0,G.lives));
+  $('time').textContent=G.t.toFixed(1)+' sn';
+  $('best').textContent=best?'rekor '+best.toFixed(1):'';
+}
+setInterval(()=>{
+  const e=Object.entries(G.bad).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  $('rows').innerHTML=e.length?e.map(([u,p])=>'<div><span>'+esc(u)+'</span><b>'+p+'</b></div>').join(''):'<span style="opacity:.6">Henüz kimse vuramadı</span>';
+},500);
+
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(!menu)update(dt);
+  draw();hud();requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  const k=e.key.toLowerCase();keys[k]=1;
+  if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
+  if(menu)return;
+  if(k===' '&&G.over)reset();
+  const t={1:'engel',2:'dusman',3:'bomba',4:'can',5:'kalkan'}[k];
+  if(t&&!G.over&&$('setup').dataset.test==='1')spawn(t,'deneme');
+});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=0});
+addEventListener('blur',()=>{for(const k in keys)keys[k]=0});
+
+/* ---------- chat ---------- */
+const MAP={'!engel':'engel','!düşman':'dusman','!dusman':'dusman','!bomba':'bomba','!can':'can','!kalkan':'kalkan'};
+function chat(u,txt){
+  const k=MAP[txt.trim().toLowerCase().split(/\s+/)[0]];
+  if(!k||menu||G.over)return;
+  const n=Date.now();if((cd[u]||0)>n)return;cd[u]=n+COOL;spawn(k,u);
+}
+function setSt(id,msg){$('s-'+id).textContent=msg}
+const socks={};
+
+function twitch(ch){
+  const ws=new WebSocket('wss://irc-ws.chat.twitch.tv:443');socks.tw=ws;setSt('tw','Twitch: bağlanıyor…');
+  ws.onopen=()=>{ws.send('PASS SCHMOOPIIE');ws.send('NICK justinfan'+(10000+Math.random()*80000|0));ws.send('JOIN #'+ch)};
+  ws.onmessage=e=>{for(const l of e.data.split('\r\n')){
+    if(l.startsWith('PING'))ws.send('PONG :tmi.twitch.tv');
+    else if(/ JOIN #/.test(l))setSt('tw','Twitch: bağlı');
+    else{const m=l.match(/^:([^!]+)!\S+ PRIVMSG #\S+ :(.*)$/);if(m)chat(m[1],m[2])}}};
+  ws.onclose=()=>{if(socks.tw===ws){setSt('tw','Twitch: koptu, yeniden deniyor');setTimeout(()=>socks.tw===ws&&twitch(ch),4000)}};
+}
+
+async function kick(slug,id){
+  setSt('ki','Kick: bağlanıyor…');
+  if(!id){try{const r=await fetch('https://kick.com/api/v2/channels/'+slug);id=(await r.json()).chatroom.id}
+    catch(e){setSt('ki','Kick: sohbet ID bulunamadı, Ayarlar\'dan ID gir');return}}
+  const ws=new WebSocket('wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false');socks.ki=ws;
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}
+    if(m.event==='pusher:connection_established')ws.send(JSON.stringify({event:'pusher:subscribe',data:{auth:'',channel:'chatrooms.'+id+'.v2'}}));
+    else if(m.event==='pusher_internal:subscription_succeeded')setSt('ki','Kick: bağlı');
+    else if(m.event==='pusher:ping')ws.send(JSON.stringify({event:'pusher:pong',data:{}}));
+    else if(m.event==='App\\Events\\ChatMessageEvent'){try{const d=JSON.parse(m.data);chat(d.sender.username,d.content)}catch(_){}}};
+  ws.onclose=()=>{if(socks.ki===ws){setSt('ki','Kick: koptu, yeniden deniyor');setTimeout(()=>socks.ki===ws&&kick(slug,id),4000)}};
+}
+
+/* ---------- kurulum ---------- */
+try{const s=JSON.parse(localStorage.getItem('cvs')||'{}');$('tw').value=s.tw||'';$('ki').value=s.ki||'';$('kid').value=s.kid||''}catch(_){}
+const NAME={player:'Karakter',engel:'Engel',dusman:'Düşman',bomba:'Bomba',can:'Can',kalkan:'Kalkan'};
+const F=(c,col)=>{c.fillStyle=col;c.fill()};
+const dot=(c,x,y,r,col)=>{c.fillStyle=col;c.beginPath();c.arc(x,y,r,0,7);c.fill()};
+const poly=(c,p,s,col)=>{c.beginPath();p.forEach(([x,y],i)=>c[i?'lineTo':'moveTo'](x*s,y*s));c.closePath();F(c,col)};
+const rect=(c,x,y,w,h,s,col)=>{c.fillStyle=col;c.fillRect(x*s,y*s,w*s,h*s)};
+const line=(c,x1,y1,x2,y2,s,col,w)=>{c.strokeStyle=col;c.lineWidth=w;c.beginPath();c.moveTo(x1*s,y1*s);c.lineTo(x2*s,y2*s);c.stroke()};
+const eyes=(c,s,y,r,col)=>{dot(c,-s*.1,y*s,s*r,col);dot(c,s*.1,y*s,s*r,col)};
+const V={
+ player:[
+  ['Sarı top',(c,s)=>{dot(c,0,0,s*.27,'#ffd166');eyes(c,s,-.06,.05,'#14213d')}],
+  ['Robot',(c,s)=>{rect(c,-.25,-.2,.5,.42,s,'#9ad1d4');eyes(c,s,-.05,.06,'#14213d');rect(c,-.02,-.36,.04,.16,s,'#9ad1d4');dot(c,0,-s*.38,s*.05,'#ef476f')}],
+  ['Kedi',(c,s)=>{poly(c,[[-.24,-.05],[-.2,-.34],[-.03,-.2]],s,'#f4a261');poly(c,[[.24,-.05],[.2,-.34],[.03,-.2]],s,'#f4a261');dot(c,0,s*.02,s*.26,'#f4a261');eyes(c,s,0,.045,'#14213d');line(c,-.3,.08,-.14,.06,s,'#14213d',1.5);line(c,.3,.08,.14,.06,s,'#14213d',1.5)}],
+  ['Hayalet',(c,s)=>{c.beginPath();c.arc(0,-s*.06,s*.26,Math.PI,0);c.lineTo(s*.26,s*.26);for(let i=0;i<3;i++)c.quadraticCurveTo(s*(.26-.173*i-.087),s*.14,s*(.26-.173*(i+1)),s*.26);c.closePath();F(c,'#e9ecff');eyes(c,s,-.08,.05,'#14213d')}]],
+ engel:[
+  ['Kırmızı blok',(c,s)=>rect(c,-.33,-.33,.66,.66,s,'#ef476f')],
+  ['Kaya',(c,s)=>{poly(c,[[-.3,-.1],[-.15,-.32],[.15,-.3],[.32,-.05],[.22,.3],[-.18,.32],[-.33,.12]],s,'#8d99ae');poly(c,[[-.15,-.32],[.15,-.3],[.05,-.08],[-.2,-.08]],s,'#b0bac9')}],
+  ['Buz',(c,s)=>{poly(c,[[0,-.36],[.28,0],[0,.36],[-.28,0]],s,'#8ecae6');poly(c,[[0,-.36],[.28,0],[0,0]],s,'#caf0f8')}],
+  ['Kutu',(c,s)=>{rect(c,-.33,-.33,.66,.66,s,'#b07d4f');c.strokeStyle='#6f4a26';c.lineWidth=3;c.strokeRect(-s*.33,-s*.33,s*.66,s*.66);line(c,-.33,-.33,.33,.33,s,'#6f4a26',3);line(c,.33,-.33,-.33,.33,s,'#6f4a26',3)}]],
+ dusman:[
+  ['Pembe top',(c,s)=>{dot(c,0,0,s*.36,'#ff8fa3');eyes(c,s,-.05,.05,'#14213d')}],
+  ['Balçık',(c,s)=>{c.beginPath();c.ellipse(0,s*.06,s*.38,s*.3,0,0,7);F(c,'#52b788');eyes(c,s,0,.06,'#fff');eyes(c,s,0,.025,'#14213d')}],
+  ['Örümcek',(c,s)=>{for(let i=0;i<4;i++){const y=-.2+i*.13;line(c,-.1,y*.6,-.42,y,s,'#3d2c5c',2);line(c,.1,y*.6,.42,y,s,'#3d2c5c',2)}dot(c,0,0,s*.24,'#5a3d8a');eyes(c,s,-.05,.045,'#ef476f')}],
+  ['Kafatası',(c,s)=>{dot(c,0,-s*.04,s*.3,'#f1f5f9');rect(c,-.14,.18,.28,.14,s,'#f1f5f9');dot(c,-s*.11,-s*.06,s*.08,'#14213d');dot(c,s*.11,-s*.06,s*.08,'#14213d')}]],
+ bomba:[
+  ['Klasik',(c,s)=>{dot(c,0,s*.04,s*.26,'#22223b');line(c,.1,-.16,.2,-.3,s,'#c9ada7',3);dot(c,s*.2,-s*.32,s*.06,'#ffd166')}],
+  ['Dinamit',(c,s)=>{rect(c,-.12,-.26,.24,.52,s,'#ef476f');rect(c,-.12,-.08,.24,.1,s,'#f1f5f9');line(c,0,-.26,.1,-.36,s,'#c9ada7',3);dot(c,s*.1,-s*.38,s*.05,'#ffd166')}],
+  ['Mayın',(c,s)=>{for(let i=0;i<8;i++){const a=i*Math.PI/4;line(c,Math.cos(a)*.2,Math.sin(a)*.2,Math.cos(a)*.36,Math.sin(a)*.36,s,'#6c757d',4)}dot(c,0,0,s*.24,'#495057');dot(c,0,0,s*.07,'#ef476f')}]],
+ can:[
+  ['Artı',(c,s)=>{rect(c,-.08,-.3,.16,.6,s,'#06d6a0');rect(c,-.3,-.08,.6,.16,s,'#06d6a0')}],
+  ['Kalp',(c,s)=>{c.beginPath();c.moveTo(0,s*.3);c.bezierCurveTo(-s*.42,0,-s*.3,-s*.34,0,-s*.14);c.bezierCurveTo(s*.3,-s*.34,s*.42,0,0,s*.3);F(c,'#ef476f')}],
+  ['Elma',(c,s)=>{dot(c,0,s*.05,s*.26,'#e63946');line(c,0,-.2,.03,-.32,s,'#6f4a26',3);poly(c,[[.03,-.28],[.2,-.36],[.14,-.2]],s,'#52b788')}]],
+ kalkan:[
+  ['Balon',(c,s)=>{dot(c,0,0,s*.3,'rgba(94,200,255,.55)');c.strokeStyle='#5ec8ff';c.lineWidth=3;c.beginPath();c.arc(0,0,s*.3,0,7);c.stroke();dot(c,-s*.1,-s*.1,s*.05,'#fff')}],
+  ['Kalkan',(c,s)=>{c.beginPath();c.moveTo(-s*.26,-s*.3);c.lineTo(s*.26,-s*.3);c.lineTo(s*.26,0);c.quadraticCurveTo(s*.26,s*.25,0,s*.36);c.quadraticCurveTo(-s*.26,s*.25,-s*.26,0);c.closePath();F(c,'#5ec8ff');c.strokeStyle='#f1f5f9';c.lineWidth=3;c.stroke()}],
+  ['Yıldız',(c,s)=>{c.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?s*.15:s*.34;c[i?'lineTo':'moveTo'](Math.cos(a)*r,Math.sin(a)*r)}c.closePath();F(c,'#5ec8ff')}]]
+};
+const skin={};let skinSrc={},sel={};
+try{skinSrc=JSON.parse(localStorage.getItem('cvs-skins')||'{}');sel=JSON.parse(localStorage.getItem('cvs-sel')||'{}')}catch(_){}
+function drawSkin(c,k,s){
+  const p=sel[k]==='png'&&skin[k];
+  if(p){const r=Math.min(s/p.width,s/p.height);c.drawImage(p,-p.width*r/2,-p.height*r/2,p.width*r,p.height*r)}
+  else(V[k][sel[k]]||V[k][0])[1](c,s);
+}
+function img(k,x,y,s){ctx.save();ctx.translate(x,y);drawSkin(ctx,k,s);ctx.restore();return true}
+const note=t=>{$('sknote').textContent=t};
+function saveAll(){try{localStorage.setItem('cvs-skins',JSON.stringify(skinSrc));localStorage.setItem('cvs-sel',JSON.stringify(sel));return true}catch(_){return false}}
+const opts=k=>V[k].map((_,i)=>i).concat(skin[k]?['png']:[]);
+function renderSkins(){
+  $('skins').innerHTML=Object.keys(V).map(k=>{const v=sel[k]==='png'&&skin[k]?'Kendi PNG\'im':(V[k][sel[k]]||V[k][0])[0];
+    return '<div class="skin"><canvas class="th" width="56" height="56" data-t="'+k+'"></canvas><b>'+NAME[k]+'</b><span style="opacity:.75;font-size:13px">'+v+'</span>'+
+    '<div class="nav"><button data-p="'+k+'" aria-label="Önceki">‹</button><button data-n="'+k+'" aria-label="Sonraki">›</button></div>'+
+    '<label class="pick">PNG seç<input type="file" accept="image/*" data-k="'+k+'"></label>'+(skin[k]?'<button class="x" data-c="'+k+'">Sil</button>':'')+'</div>'}).join('');
+  document.querySelectorAll('#skins .th').forEach(el=>{const c=el.getContext('2d');c.translate(28,28);drawSkin(c,el.dataset.t,46)});
+}
+async function readImg(f){
+  try{return await createImageBitmap(f)}catch(_){}
+  return new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=fr.result};fr.onerror=no;fr.readAsDataURL(f)});
+}
+function shrink(i){
+  const w=i.naturalWidth||i.width,h=i.naturalHeight||i.height,r=Math.min(1,160/Math.max(w,h)),c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(w*r));c.height=Math.max(1,Math.round(h*r));c.getContext('2d').drawImage(i,0,0,c.width,c.height);return c;
+}
+$('skins').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0],k=e.target.dataset.k;if(!f||!k)return;
+  try{const c=shrink(await readImg(f));skin[k]=c;sel[k]='png';skinSrc[k]=c.toDataURL('image/png');
+    note(NAME[k]+' görseli yüklendi'+(saveAll()?' ✓':', ama kaydedilemedi: sadece bu oturumda geçerli'));renderSkins()}
+  catch(_){note('Bu dosya görsel olarak açılamadı. PNG veya JPG dene.')}
+});
+$('skins').addEventListener('click',e=>{
+  const d=e.target.dataset,k=d.p||d.n||d.c;if(!k)return;
+  if(d.c){delete skinSrc[k];delete skin[k];if(sel[k]==='png')sel[k]=0}
+  else{const o=opts(k),i=Math.max(0,o.indexOf(sel[k]===undefined?0:sel[k]));sel[k]=o[(i+(d.n?1:o.length-1))%o.length]}
+  saveAll();renderSkins();
+});
+for(const k in skinSrc){const i=new Image();i.onload=()=>{skin[k]=shrink(i);renderSkins()};i.src=skinSrc[k]}
+renderSkins();
+function closeSetup(test){$('setup').style.display='none';$('setup').dataset.test=test?'1':'0';menu=false;reset()}
+$('go').onclick=()=>{
+  const tw=$('tw').value.trim().toLowerCase().replace(/^#/,''),ki=$('ki').value.trim().toLowerCase(),kid=$('kid').value.trim();
+  try{localStorage.setItem('cvs',JSON.stringify({tw,ki,kid}))}catch(_){}
+  for(const k in socks){const w=socks[k];socks[k]=null;try{w.close()}catch(_){}}
+  setSt('tw','');setSt('ki','');
+  if(tw)twitch(tw);if(ki||kid)kick(ki,kid);
+  closeSetup(!tw&&!ki&&!kid);
+};
+$('solo').onclick=()=>{setSt('tw','Deneme modu');setSt('ki','');closeSetup(true)};
+$('gear').onclick=()=>{menu=true;$('setup').style.display='flex'};
+</script>
+</body>
+</html>
